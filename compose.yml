@@ -1,20 +1,37 @@
 ---
 
 services:
-  db:
-    image: postgres:16-alpine # Используем официальный образ PostgreSQL
-    restart: always
+  app:
+    build: .
+    ports:
+      - "8080:8080"
     environment:
-      # Задаем имя пользователя, пароль и базу данных для PostgreSQL
+      - DATABASE_URL=postgres://myuser:mypassword@db:5432/usersdb?sslmode=disable
+      - SERVER_PORT=8080
+      - ENV=development
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: usersdb
     ports:
-      # Пробрасываем порт 5432 контейнера на порт 5432 вашего компьютера
       - "5432:5432"
     volumes:
-      # (Опционально) Сохраняем данные БД между перезапусками контейнера
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d usersdb"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:

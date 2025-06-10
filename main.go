@@ -1,19 +1,28 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/avetis74/12_app_factors/handlers"
 	"github.com/avetis74/12_app_factors/storage"
 
 	"github.com/labstack/echo/v4"
-	_ "github.com/lib/pq" // Драйвер для PostgreSQL. Пустой импорт нужен для регистрации драйвера.
+	"github.com/labstack/echo/v4/middleware"
+	_ "github.com/lib/pq" // Драйвер для PostgreSQL
 )
 
 func main() {
+	// Фактор XI: Логи как потоки событий - настройка логирования
+	log.SetOutput(os.Stdout)
+
 	// Фактор III: Конфигурация из переменных окружения
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
@@ -39,16 +48,49 @@ func main() {
 
 	e := echo.New()
 
+	// Middleware
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
 	// Routes
 	e.GET("/users", userHandler.GetUsers)
 	e.POST("/users", userHandler.CreateUser)
-	// Другие роуты...
-	// e.GET("/users/:id", userHandler.GetUser)
+	e.GET("/users/:id", userHandler.GetUser)
+	e.PUT("/users/:id", userHandler.UpdateUser)
+	e.DELETE("/users/:id", userHandler.DeleteUser)
+
+	// Health check endpoint
+	e.GET("/health", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
+	})
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"
 	}
-	addr := fmt.Sprintf(":%s", port)
-	e.Logger.Fatal(e.Start(addr))
+	
+	// Фактор IX: Disposability - Graceful shutdown
+	go func() {
+		addr := fmt.Sprintf(":%s", port)
+		log.Printf("Starting server on port %s", port)
+		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("shutting down the server: %v", err)
+		}
+	}()
+
+	// Ожидание сигнала завершения
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// Graceful shutdown с таймаутом
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	if err := e.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+	
+	log.Println("Server exited")
 }

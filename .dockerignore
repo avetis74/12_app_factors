@@ -1,0 +1,9 @@
+# Фактор V: Build, release, run - исключаем ненужные файлы из контекста сборки
+
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+compose.yml
+env.example 
