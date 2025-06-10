@@ -8,9 +8,10 @@ import (
 
 // User описывает модель пользователя в базе данных.
 type User struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID     int    `json:"id"`
+	Name   string `json:"name"`
+	Email  string `json:"email"`
+	Status string `json:"status"`
 }
 
 // UserStore определяет интерфейс для работы с хранилищем пользователей.
@@ -35,7 +36,7 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 // GetUsers возвращает всех пользователей из БД.
 func (s *PostgresStore) GetUsers() ([]User, error) {
 	log.Println("Fetching all users from database")
-	rows, err := s.DB.Query("SELECT id, name, email FROM users")
+	rows, err := s.DB.Query("SELECT id, name, email, COALESCE(status, 'active') FROM users")
 	if err != nil {
 		log.Printf("Error querying users: %v", err)
 		return nil, err
@@ -45,7 +46,7 @@ func (s *PostgresStore) GetUsers() ([]User, error) {
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Status); err != nil {
 			log.Printf("Error scanning user row: %v", err)
 			return nil, err
 		}
@@ -58,9 +59,15 @@ func (s *PostgresStore) GetUsers() ([]User, error) {
 // CreateUser создает нового пользователя в БД.
 func (s *PostgresStore) CreateUser(user *User) error {
 	log.Printf("Creating user: %s (%s)", user.Name, user.Email)
+	
+	// Устанавливаем статус по умолчанию, если не указан
+	if user.Status == "" {
+		user.Status = "active"
+	}
+	
 	err := s.DB.QueryRow(
-		"INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
-		user.Name, user.Email,
+		"INSERT INTO users (name, email, status) VALUES ($1, $2, $3) RETURNING id",
+		user.Name, user.Email, user.Status,
 	).Scan(&user.ID)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -74,7 +81,7 @@ func (s *PostgresStore) CreateUser(user *User) error {
 func (s *PostgresStore) GetUser(id int) (*User, error) {
 	log.Printf("Fetching user with ID: %d", id)
 	var u User
-	err := s.DB.QueryRow("SELECT id, name, email FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email)
+	err := s.DB.QueryRow("SELECT id, name, email, COALESCE(status, 'active') FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email, &u.Status)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("User with ID %d not found", id)
@@ -90,7 +97,13 @@ func (s *PostgresStore) GetUser(id int) (*User, error) {
 // UpdateUser обновляет данные пользователя по ID.
 func (s *PostgresStore) UpdateUser(id int, user *User) error {
 	log.Printf("Updating user %d: %s (%s)", id, user.Name, user.Email)
-	result, err := s.DB.Exec("UPDATE users SET name = $1, email = $2 WHERE id = $3", user.Name, user.Email, id)
+	
+	// Устанавливаем статус по умолчанию, если не указан
+	if user.Status == "" {
+		user.Status = "active"
+	}
+	
+	result, err := s.DB.Exec("UPDATE users SET name = $1, email = $2, status = $3 WHERE id = $4", user.Name, user.Email, user.Status, id)
 	if err != nil {
 		log.Printf("Error updating user %d: %v", id, err)
 		return err

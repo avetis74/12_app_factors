@@ -29,6 +29,11 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is not set")
 	}
 
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		log.Fatal("REDIS_URL environment variable is not set")
+	}
+
 	// Подключаемся к базе данных
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -42,9 +47,20 @@ func main() {
 
 	log.Println("Database connection successful")
 
+	// Подключаемся к Redis
+	redisCache, err := storage.NewRedisCache(redisURL)
+	if err != nil {
+		log.Fatalf("could not connect to Redis: %v", err)
+	}
+	defer redisCache.Close()
+
 	// Создаем экземпляры наших зависимостей
 	userStore := storage.NewPostgresStore(db)
-	userHandler := handlers.NewUserHandler(userStore)
+	
+	// Оборачиваем store в кеширующий слой
+	cachedUserStore := storage.NewCachedUserStore(userStore, redisCache)
+	
+	userHandler := handlers.NewUserHandler(cachedUserStore)
 
 	e := echo.New()
 
@@ -62,6 +78,33 @@ func main() {
 	// Health check endpoint
 	e.GET("/health", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
+	})
+
+	// Cache stats endpoint
+	e.GET("/cache/stats", func(c echo.Context) error {
+		// Простая проверка Redis
+		ctx := context.Background()
+		err := redisCache.Set(ctx, "test", "ping", time.Second)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"redis": "error",
+				"error": err.Error(),
+			})
+		}
+		
+		var result string
+		err = redisCache.Get(ctx, "test", &result)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"redis": "error",
+				"error": err.Error(),
+			})
+		}
+
+		return c.JSON(http.StatusOK, map[string]string{
+			"redis": "healthy",
+			"test":  result,
+		})
 	})
 
 	port := os.Getenv("SERVER_PORT")

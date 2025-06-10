@@ -1,14 +1,11 @@
--- Фактор XII: Admin processes - скрипт инициализации БД
+-- Фактор XII: Admin processes - таблица для отслеживания миграций
 
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Создаем таблицу для отслеживания версий миграций (golang-migrate создаст автоматически)
+-- Но для примера покажем структуру:
 
--- Пример данных для тестирования
-INSERT INTO users (name, email) VALUES 
-    ('John Doe', 'john@example.com'),
-    ('Jane Smith', 'jane@example.com')
-ON CONFLICT (email) DO NOTHING; 
+-- CREATE TABLE IF NOT EXISTS schema_migrations (
+--     version BIGINT NOT NULL PRIMARY KEY,
+--     dirty BOOLEAN NOT NULL
+-- );
+
+-- Примечание: golang-migrate автоматически создает эту таблицу при первом запуске 

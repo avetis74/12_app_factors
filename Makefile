@@ -24,11 +24,11 @@ docker-build:
 
 # Запуск через Docker Compose
 docker-run:
-	docker-compose up --build
+	docker compose up --build
 
 # Остановка Docker Compose
 docker-stop:
-	docker-compose down
+	docker compose down
 
 # Разработка с автоперезагрузкой (требует air: go install github.com/cosmtrek/air@latest)
 dev:
@@ -40,4 +40,23 @@ lint:
 
 # Форматирование кода
 fmt:
-	go fmt ./... 
+	go fmt ./...
+
+# Миграции
+migrate-up:
+	go run cmd/migrate/main.go -command=up
+
+migrate-down:
+	go run cmd/migrate/main.go -command=down -steps=1
+
+migrate-status:
+	go run cmd/migrate/main.go -command=version
+
+migrate-create:
+	@read -p "Enter migration name: " name; \
+	go run cmd/migrate/main.go -command=create -name=$$name
+
+# Сброс базы данных (осторожно!)
+migrate-reset:
+	go run cmd/migrate/main.go -command=down
+	go run cmd/migrate/main.go -command=up 

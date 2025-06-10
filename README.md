@@ -9,7 +9,7 @@
 1. **Codebase** - Одна кодовая база в Git
 2. **Dependencies** - Зависимости в `go.mod`
 3. **Config** - Конфигурация через переменные окружения
-4. **Backing services** - PostgreSQL как внешний сервис
+4. **Backing services** - PostgreSQL и Redis как внешние сервисы
 5. **Build, release, run** - Dockerfile и Makefile
 6. **Processes** - Stateless процессы
 7. **Port binding** - Привязка к порту через переменную окружения
@@ -17,7 +17,7 @@
 9. **Disposability** - Быстрый запуск и корректное завершение
 10. **Dev/prod parity** - Docker для одинаковой среды
 11. **Logs** - Структурированные логи в stdout
-12. **Admin processes** - SQL скрипты для инициализации
+12. **Admin processes** - Система миграций с версионированием
 
 ## Запуск
 
@@ -36,15 +36,17 @@ make docker-run
 ### Переменные окружения
 
 - `DATABASE_URL` - URL подключения к PostgreSQL
+- `REDIS_URL` - URL подключения к Redis
 - `SERVER_PORT` - Порт сервера (по умолчанию 8080)
 - `ENV` - Окружение (development/staging/production)
 
 ## API Endpoints
 
 - `GET /health` - Проверка состояния
-- `GET /users` - Получить всех пользователей
+- `GET /cache/stats` - Статистика Redis кеша
+- `GET /users` - Получить всех пользователей (с кешированием)
 - `POST /users` - Создать пользователя
-- `GET /users/:id` - Получить пользователя по ID
+- `GET /users/:id` - Получить пользователя по ID (с кешированием)
 - `PUT /users/:id` - Обновить пользователя
 - `DELETE /users/:id` - Удалить пользователя
 
@@ -56,4 +58,33 @@ make run         # Запуск
 make test        # Тестирование
 make docker-run  # Запуск в Docker
 make fmt         # Форматирование кода
+```
+
+## Миграции базы данных
+
+```bash
+# Применить все миграции
+make migrate-up
+
+# Откатить последнюю миграцию
+make migrate-down
+
+# Показать текущую версию
+make migrate-status
+
+# Создать новую миграцию
+make migrate-create
+
+# Полный сброс БД (осторожно!)
+make migrate-reset
+```
+
+### Структура миграций
+
+```
+migrations/
+├── 001_create_users_table.up.sql     # Создание таблицы users
+├── 001_create_users_table.down.sql   # Откат создания таблицы
+├── 002_add_user_status.up.sql        # Добавление поля status
+└── 002_add_user_status.down.sql      # Откат добавления поля
 ```
