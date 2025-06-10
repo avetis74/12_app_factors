@@ -1,0 +1,21 @@
+---
+
+services:
+  db:
+    image: postgres:16-alpine # Используем официальный образ PostgreSQL
+    restart: always
+    environment:
+      # Задаем имя пользователя, пароль и базу данных для PostgreSQL
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: usersdb
+    ports:
+      # Пробрасываем порт 5432 контейнера на порт 5432 вашего компьютера
+      - "5432:5432"
+    volumes:
+      # (Опционально) Сохраняем данные БД между перезапусками контейнера
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
