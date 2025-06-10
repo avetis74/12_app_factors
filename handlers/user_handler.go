@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-
+	"fmt"
 	"github.com/avetis74/12_app_factors/storage" // Импортируем наш пакет storage
 	"github.com/labstack/echo/v4"
 )

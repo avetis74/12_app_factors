@@ -2,7 +2,7 @@ package storage
 
 import (
 	"database/sql"
-	"fmt"
+	"fmt" // fmt теперь нужен, так как мы используем fmt.Errorf
 )
 
 // User описывает модель пользователя в базе данных.
@@ -13,7 +13,6 @@ type User struct {
 }
 
 // UserStore определяет интерфейс для работы с хранилищем пользователей.
-// Использование интерфейса позволяет нам легко подменять реализацию (например, для тестов).
 type UserStore interface {
 	GetUsers() ([]User, error)
 	GetUser(id int) (*User, error)
@@ -52,17 +51,64 @@ func (s *PostgresStore) GetUsers() ([]User, error) {
 }
 
 // CreateUser создает нового пользователя в БД.
-// Возвращает ошибку, если что-то пошло не так. ID будет присвоен автоматически.
 func (s *PostgresStore) CreateUser(user *User) error {
-	// Мы возвращаем ID, чтобы обновить наш объект user
 	err := s.DB.QueryRow(
 		"INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
 		user.Name, user.Email,
 	).Scan(&user.ID)
-
 	return err
 }
 
-// GetUser, UpdateUser, DeleteUser реализуются аналогично...
-// (Для краткости пока оставим их, вы можете добавить их по аналогии)
+// НОВЫЙ МЕТОД
+// GetUser находит одного пользователя по ID.
+func (s *PostgresStore) GetUser(id int) (*User, error) {
+	var u User
+	// QueryRow идеально подходит для запросов, которые должны вернуть не более одной строки.
+	err := s.DB.QueryRow("SELECT id, name, email FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email)
+	if err != nil {
+		// Важно проверять на sql.ErrNoRows, чтобы корректно обрабатывать случай,
+		// когда пользователь просто не найден, а не когда произошла реальная ошибка.
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user with id %d not found", id)
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+// НОВЫЙ МЕТОД
+// UpdateUser обновляет данные пользователя по ID.
+func (s *PostgresStore) UpdateUser(id int, user *User) error {
+	// DB.Exec используется для команд, не возвращающих строки (UPDATE, DELETE, INSERT без RETURNING).
+	result, err := s.DB.Exec("UPDATE users SET name = $1, email = $2 WHERE id = $3", user.Name, user.Email, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	// Если ни одна строка не была затронута, значит пользователя с таким ID не существует.
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %d not found", id)
+	}
+	return nil
+}
+
+// НОВЫЙ МЕТОД
+// DeleteUser удаляет пользователя по ID.
+func (s *PostgresStore) DeleteUser(id int) error {
+	result, err := s.DB.Exec("DELETE FROM users WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user with id %d not found", id)
+	}
+	return nil
+}
 
